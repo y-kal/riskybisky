@@ -55,7 +55,7 @@ riskybisky/riskybisky
     ├── __init__.py
     ├── sbom_extract.py
     └── normalize_sbom.py
-
+```
 
 ### Notes (repo hygiene + behaviour)
 
