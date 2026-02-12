@@ -10,7 +10,10 @@
   },
   "outputs": {
     "cyclonedx_json": "artifacts/sha256_65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10/sbom.cdx.json",
-    "spdx_json": "artifacts/sha256_65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10/sbom.spdx.json"
+    "spdx_json": "artifacts/sha256_65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10/sbom.spdx.json",
+    "grype_raw": "vulns.grype.json",
+    "vulns_normalized": "vulns.json",
+    "vuln_scan_completed_at": "2026-02-12T11:10:55.062631+00:00"
   },
   "artifact_key": "sha256_65645c7bb6a06618",
   "artifact_dir": "artifacts/sha256_65645c7bb6a06618"

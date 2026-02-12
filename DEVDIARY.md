@@ -169,3 +169,143 @@ skopeo inspect docker://nginx:1.27-alpine
 * [ ] **Richer file locations**: CycloneDX/SPDX may not include reliable file paths; optionally add Syft native JSON output later and merge locations into `packages.json`.
 * [ ] **Improve ecosystem/type mapping**: CycloneDX component `type` can be generic; better derive ecosystem from `purl` when available.
 * [ ] **Standardise ignoring generated files**: add `.gitignore` entries for `artifacts/`, `__pycache__/`, `.venv/` (when repo is ready for git hygiene).
+
+---
+
+## Day 2 — Vulnerability Scanning + Normalised CVE Dataset (Grype)
+
+### Goal (Checklist)
+- [x] Select a vulnerability scanner compatible with Syft/SBOM pipeline (Grype)
+- [x] Implement vulnerability scanning stage as a CLI tool
+- [x] Store raw scanner output for reproducibility (`vulns.grype.json`)
+- [x] Convert raw output into an internal normalised format (`vulns.json`)
+- [x] Keep outputs co-located inside the same `artifacts/<artifact_key>/` bundle
+- [x] Validate results quickly using `jq` (local sanity checks)
+
+---
+
+### What was implemented
+- **Vulnerability Scanner CLI** (`sbom_tool/vuln_scan.py`)
+  - Input: `--scan-dir artifacts/<artifact_key>`
+  - Uses **Grype (Docker image)** to scan vulnerabilities
+  - Default approach: scan the **SBOM** (consistent with SBOM-based pipeline)
+  - Produces two outputs:
+    - `vulns.grype.json` → raw Grype JSON output (for audit/re-runs without rescanning)
+    - `vulns.json` → internal normalised vulnerability list (for enrichment + scoring later)
+  - Joins vulnerability findings to our internal packages using:
+    - `purl` when present (preferred)
+    - fallback key: `<type>:<name>@<version>` when `purl` is missing
+  - Captures fix-related info where available:
+    - `fix_versions[]` and `fix_state` (best-effort extraction)
+  - Stores match detail hints (eg. match type/confidence) for later filtering of noisy matches
+
+---
+
+## Folder structure (current)
+```text
+riskybisky/riskybisky
+├── DEVDIARY.md
+├── README.md
+├── artifacts
+│   └── sha256_65645c7bb6a06618
+│       ├── packages.json
+│       ├── sbom.cdx.json
+│       ├── sbom.meta.json
+│       ├── sbom.spdx.json
+│       ├── vulns.grype.json
+│       └── vulns.json
+├── digests
+│   ├── index.json
+│   └── sha256_65645c7bb6a06618.json
+└── sbom_tool
+    ├── __init__.py
+    ├── normalize_sbom.py
+    ├── sbom_extract.py
+    └── vuln_scan.py
+````
+
+### Notes (repo hygiene + behaviour)
+
+* `vulns.grype.json` is intentionally kept even though it’s “redundant” with `vulns.json`:
+
+  * raw output is useful for debugging, auditing, and re-normalising later without rescanning.
+* SBOM-scanning is preferred over image-scanning because it keeps the vulnerability stage aligned with the exact SBOM we generated.
+* `__pycache__/` remains normal Python noise (safe to ignore/delete; don’t commit).
+
+---
+
+## One-line explanation for every file/folder (new additions for Day 2)
+
+* `sbom_tool/vuln_scan.py` — runs Grype on the SBOM (or image) and generates `vulns.grype.json` + `vulns.json`.
+* `artifacts/.../vulns.grype.json` — raw vulnerability scan output from Grype (matches, artifacts, vulnerabilities, fix info).
+* `artifacts/.../vulns.json` — internal normalised vulnerabilities list (CVE + severity + package mapping + fix versions + match hints).
+
+---
+
+## How to run (current pipeline)
+
+> Run commands from the project root: `riskybisky/riskybisky`
+
+### 0) Activate environment
+
+```bash
+cd ~/riskybisky/riskybisky
+source .venv/bin/activate
+```
+
+### 1) Ensure Grype is available (once)
+
+```bash
+docker pull anchore/grype:latest
+docker run --rm anchore/grype:latest version
+```
+
+### 2) Run vulnerability scan + normalisation for an artifact bundle
+
+```bash
+python -m sbom_tool.vuln_scan --scan-dir artifacts/sha256_65645c7bb6a06618
+```
+
+After this, the scan folder will contain:
+
+* `vulns.grype.json`
+* `vulns.json`
+
+### 3) Quick sanity checks (optional)
+
+```bash
+jq '.matches | length' artifacts/sha256_65645c7bb6a06618/vulns.grype.json
+jq '.vulnerabilities | length' artifacts/sha256_65645c7bb6a06618/vulns.json 2>/dev/null || true
+jq '.counts' artifacts/sha256_65645c7bb6a06618/vulns.json 2>/dev/null || true
+```
+
+(Depending on how `vulns.json` is structured, use `jq` accordingly — the goal is to quickly validate “we have results”.)
+
+---
+
+## Design decisions
+
+* **Scanner choice: Grype** because it complements Syft and supports scanning SBOM inputs cleanly.
+* **Two-layer output**:
+
+  * raw (`vulns.grype.json`) for traceability
+  * normalised (`vulns.json`) for downstream enrichment/scoring/dashboard
+* **Join strategy**:
+
+  * prefer `purl` (stable cross-tool identifier)
+  * fallback to `<type>:<name>@<version>` when needed
+* **Keep match hints** so we can later implement confidence-based filtering (reduce false positives).
+
+---
+
+## Known issues / TODO (updated)
+
+* [ ] Add “local-only image” support robustly (if registry digest resolution fails, fall back to Docker inspect).
+* [ ] Add caching strategy for Grype DB updates (speed + offline resilience).
+* [ ] Add enrichment stage next: CVSS + EPSS + KEV with caching + graceful fallback.
+* [ ] Add simple summary export (counts by severity, top packages, top CVEs) for quick reporting.
+* [ ] Add confidence filtering rules using match detail hints (reduce noise before dashboard stage).
+
+```
+::contentReference[oaicite:1]{index=1}
+```
