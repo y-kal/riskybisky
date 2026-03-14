@@ -1,6 +1,7 @@
 # Python bytecode / caches
 __pycache__/
 *.py[cod]
+*.pyo
 
 # Virtual environments
 .venv/
@@ -9,6 +10,12 @@ env/
 
 # Generated outputs
 artifacts/
+digests/
+cache/
+
+# Local secrets
+.env
+.env.*
 
 # OS/editor junk
 .DS_Store
