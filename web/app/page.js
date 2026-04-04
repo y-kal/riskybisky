@@ -1,0 +1,349 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+const API_BASE =
+    process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+
+async function fetchJson(path, options) {
+    const response = await fetch(`${API_BASE}${path}`, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+    });
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `Request failed: ${response.status}`);
+    }
+    return response.json();
+}
+
+export default function HomePage() {
+    const [image, setImage] = useState("nginx:1.27-alpine");
+    const [platform, setPlatform] = useState("linux/amd64");
+    const [artifacts, setArtifacts] = useState([]);
+    const [selectedKey, setSelectedKey] = useState("");
+    const [selectedArtifact, setSelectedArtifact] = useState(null);
+    const [job, setJob] = useState(null);
+    const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    async function refreshArtifacts() {
+        const data = await fetchJson("/api/artifacts");
+        setArtifacts(data.items || []);
+        if (!selectedKey && data.items && data.items.length > 0) {
+            setSelectedKey(data.items[0].artifact_key);
+        }
+    }
+
+    useEffect(() => {
+        refreshArtifacts().catch((err) => setError(err.message));
+    }, []);
+
+    useEffect(() => {
+        if (!selectedKey) return;
+        fetchJson(`/api/artifacts/${selectedKey}`)
+            .then(setSelectedArtifact)
+            .catch((err) => setError(err.message));
+    }, [selectedKey]);
+
+    useEffect(() => {
+        if (
+            !job?.job_id ||
+            job.status === "completed" ||
+            job.status === "failed"
+        )
+            return;
+        const timer = setInterval(async () => {
+            try {
+                const updated = await fetchJson(`/api/jobs/${job.job_id}`);
+                setJob(updated);
+                if (updated.status === "completed") {
+                    await refreshArtifacts();
+                }
+            } catch (err) {
+                setError(err.message);
+            }
+        }, 2500);
+        return () => clearInterval(timer);
+    }, [job]);
+
+    const summaryCards = useMemo(() => {
+        if (!selectedArtifact) return [];
+        const counts = selectedArtifact.summary?.counts || {};
+        return [
+            { label: "Packages", value: counts.packages ?? 0 },
+            { label: "Vulnerabilities", value: counts.vulnerabilities ?? 0 },
+            { label: "ATT&CK Techniques", value: counts.techniques ?? 0 },
+        ];
+    }, [selectedArtifact]);
+
+    async function submitScan(event) {
+        event.preventDefault();
+        setError("");
+        setLoading(true);
+        try {
+            const data = await fetchJson("/api/scans", {
+                method: "POST",
+                body: JSON.stringify({
+                    image,
+                    platform,
+                    short_len: 16,
+                    skip_pull: false,
+                }),
+            });
+            setJob(data);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <main className="page-shell">
+            <section className="hero">
+                <div>
+                    <p className="eyebrow">riskybisky</p>
+                    <h1>
+                        Scan containers, inspect risk, and browse ATT&CK output
+                        in one portal.
+                    </h1>
+                    <p className="lede">
+                        The portal talks to a Python API that reuses the
+                        existing SBOM, vulnerability, enrichment, and ATT&CK
+                        pipeline.
+                    </p>
+                </div>
+                <form className="scan-card" onSubmit={submitScan}>
+                    <label>
+                        Image reference
+                        <input
+                            value={image}
+                            onChange={(event) => setImage(event.target.value)}
+                            placeholder="nginx:1.27-alpine"
+                        />
+                    </label>
+                    <label>
+                        Platform
+                        <input
+                            value={platform}
+                            onChange={(event) =>
+                                setPlatform(event.target.value)
+                            }
+                            placeholder="linux/amd64"
+                        />
+                    </label>
+                    <button type="submit" disabled={loading}>
+                        {loading ? "Submitting..." : "Run Scan"}
+                    </button>
+                    {job && (
+                        <p className="job-state">
+                            Job {job.job_id} · {job.status} · {job.stage}
+                        </p>
+                    )}
+                </form>
+            </section>
+
+            {error ? <div className="banner error">{error}</div> : null}
+
+            <section className="content-grid">
+                <aside className="panel list-panel">
+                    <div className="panel-header">
+                        <h2>Artifacts</h2>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                refreshArtifacts().catch((err) =>
+                                    setError(err.message),
+                                )
+                            }
+                        >
+                            Refresh
+                        </button>
+                    </div>
+                    <div className="artifact-list">
+                        {artifacts.map((artifact) => (
+                            <button
+                                key={artifact.artifact_key}
+                                className={
+                                    artifact.artifact_key === selectedKey
+                                        ? "artifact-row active"
+                                        : "artifact-row"
+                                }
+                                onClick={() =>
+                                    setSelectedKey(artifact.artifact_key)
+                                }
+                            >
+                                <strong>{artifact.artifact_key}</strong>
+                                <span>
+                                    {artifact.image_input || "unknown image"}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </aside>
+
+                <section className="panel detail-panel">
+                    {selectedArtifact ? (
+                        <>
+                            <div className="panel-header">
+                                <div>
+                                    <h2>
+                                        {selectedArtifact.summary.artifact_key}
+                                    </h2>
+                                    <p>
+                                        {selectedArtifact.summary.image_input}
+                                    </p>
+                                </div>
+                                <a
+                                    href={`${API_BASE}/api/artifacts/${selectedArtifact.summary.artifact_key}/files/sbom.meta.json`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    Download meta
+                                </a>
+                            </div>
+
+                            <div className="metrics-row">
+                                {summaryCards.map((card) => (
+                                    <article
+                                        className="metric"
+                                        key={card.label}
+                                    >
+                                        <span>{card.label}</span>
+                                        <strong>{card.value}</strong>
+                                    </article>
+                                ))}
+                            </div>
+
+                            <div className="table-block">
+                                <h3>Packages</h3>
+                                <div className="table-scroll">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Version</th>
+                                                <th>Type</th>
+                                                <th>Depth</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {(
+                                                selectedArtifact.packages
+                                                    .packages || []
+                                            )
+                                                .slice(0, 12)
+                                                .map((pkg) => (
+                                                    <tr key={pkg.id}>
+                                                        <td>{pkg.name}</td>
+                                                        <td>
+                                                            {pkg.version || "—"}
+                                                        </td>
+                                                        <td>{pkg.type}</td>
+                                                        <td>
+                                                            {
+                                                                pkg.dependency_depth
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="table-block two-col">
+                                <div>
+                                    <h3>Vulnerabilities</h3>
+                                    <div className="table-scroll">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>ID</th>
+                                                    <th>Severity</th>
+                                                    <th>Package</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(
+                                                    selectedArtifact.vulns
+                                                        .vulnerabilities || []
+                                                )
+                                                    .slice(0, 10)
+                                                    .map((item, index) => (
+                                                        <tr
+                                                            key={`${item.vuln_id}-${index}`}
+                                                        >
+                                                            <td>
+                                                                {item.vuln_id}
+                                                            </td>
+                                                            <td>
+                                                                {item.severity}
+                                                            </td>
+                                                            <td>
+                                                                {
+                                                                    item.package_name
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3>ATT&CK Techniques</h3>
+                                    <div className="table-scroll">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Technique</th>
+                                                    <th>Priority</th>
+                                                    <th>Risk</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(
+                                                    selectedArtifact
+                                                        .attack_summary
+                                                        .techniques || []
+                                                )
+                                                    .slice(0, 10)
+                                                    .map((item) => (
+                                                        <tr
+                                                            key={
+                                                                item.technique_id
+                                                            }
+                                                        >
+                                                            <td>
+                                                                {
+                                                                    item.technique_id
+                                                                }
+                                                            </td>
+                                                            <td>
+                                                                {item.priority}
+                                                            </td>
+                                                            <td>
+                                                                {
+                                                                    item.aggregate_risk
+                                                                }
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="empty-state">
+                            No artifact selected yet.
+                        </div>
+                    )}
+                </section>
+            </section>
+        </main>
+    );
+}

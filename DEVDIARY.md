@@ -6,6 +6,7 @@
 ## Day 1 — SBOM Extraction + Normalisation Pipeline (Working End-to-End)
 
 ### Goal (Checklist)
+
 - [x] Decide SBOM formats to generate (CycloneDX + SPDX)
 - [x] Implement SBOM extraction from a container image reference (tag or digest)
 - [x] Store scan outputs in a digest-keyed artifacts folder (cache-friendly)
@@ -16,28 +17,30 @@
 ---
 
 ### What was implemented
+
 - **SBOM Extractor** (`sbom_tool/sbom_extract.py`)
-  - Accepts an image ref (e.g., `nginx:1.27-alpine` or `nginx@sha256:...`)
-  - Resolves tag → digest (reproducibility)
-  - Pulls the image deterministically (optionally pinned by platform)
-  - Generates SBOM outputs using **Syft** (via Docker):
-    - CycloneDX JSON (`sbom.cdx.json`)
-    - SPDX JSON (`sbom.spdx.json`)
-  - Writes a metadata record (`sbom.meta.json`)
-  - Uses caching: if outputs exist, reuse instead of regenerating
-  - Updates digest registry (`digests/`) so shortened keys still map back to full digests
+    - Accepts an image ref (e.g., `nginx:1.27-alpine` or `nginx@sha256:...`)
+    - Resolves tag → digest (reproducibility)
+    - Pulls the image deterministically (optionally pinned by platform)
+    - Generates SBOM outputs using **Syft** (via Docker):
+        - CycloneDX JSON (`sbom.cdx.json`)
+        - SPDX JSON (`sbom.spdx.json`)
+    - Writes a metadata record (`sbom.meta.json`)
+    - Uses caching: if outputs exist, reuse instead of regenerating
+    - Updates digest registry (`digests/`) so shortened keys still map back to full digests
 
 - **SBOM Normaliser** (`sbom_tool/normalize_sbom.py`)
-  - Reads `sbom.cdx.json`
-  - Produces `packages.json` in a consistent internal schema:
-    - stable package id (prefer `purl`, fallback to `type:name@version`)
-    - name, version, type, purl, cpe
-    - licenses, supplier, hashes
-    - dependencies + estimated dependency depth
+    - Reads `sbom.cdx.json`
+    - Produces `packages.json` in a consistent internal schema:
+        - stable package id (prefer `purl`, fallback to `type:name@version`)
+        - name, version, type, purl, cpe
+        - licenses, supplier, hashes
+        - dependencies + estimated dependency depth
 
 ---
 
 ## Folder structure (current)
+
 ```text
 riskybisky/riskybisky
 ├── README.md
@@ -59,30 +62,30 @@ riskybisky/riskybisky
 
 ### Notes (repo hygiene + behaviour)
 
-* `__pycache__/` and `*.pyc` files are generated automatically by Python and are not part of the implementation.
-* `artifacts/` contains generated scan outputs; it should typically be gitignored later.
-* Tags like `nginx:1.27-alpine` are convenient for testing, but tags can change over time. The pipeline resolves tags to a digest (`sha256:...`) for reproducible scans.
-* CycloneDX and SPDX often differ in structure; the normaliser currently uses CycloneDX because it provides a clean `components` + `dependencies` model.
+- `__pycache__/` and `*.pyc` files are generated automatically by Python and are not part of the implementation.
+- `artifacts/` contains generated scan outputs; it should typically be gitignored later.
+- Tags like `nginx:1.27-alpine` are convenient for testing, but tags can change over time. The pipeline resolves tags to a digest (`sha256:...`) for reproducible scans.
+- CycloneDX and SPDX often differ in structure; the normaliser currently uses CycloneDX because it provides a clean `components` + `dependencies` model.
 
 ---
 
 ## One-line explanation for every file/folder
 
-* `README.md` — main project documentation (will be finalised at the end).
-* `DEV_DIARY.md` — day-wise implementation log + run instructions + decisions + TODOs.
-* `artifacts/` — generated outputs for each scanned image (cached by artifact key).
-* `artifacts/sha256_<...>/` — one scan “bundle” (SBOMs + metadata + normalised package list) for a specific image digest.
-* `artifacts/.../sbom.cdx.json` — CycloneDX SBOM JSON generated from the image.
-* `artifacts/.../sbom.spdx.json` — SPDX SBOM JSON generated from the image.
-* `artifacts/.../sbom.meta.json` — provenance (input ref, resolved digest, platform, tool versions, artifact key, timestamps).
-* `artifacts/.../packages.json` — internal normalised package list used by later stages (CVE scan join, scoring, dashboard).
-* `digests/` — digest registry to map shortened artifact keys back to full digests.
-* `digests/index.json` — global mapping of all known `artifact_key → full_digest` records.
-* `digests/sha256_<short>.json` — per-scan digest record (same mapping as index entry, but isolated per key).
-* `sbom_tool/` — Python tooling/scripts for SBOM extraction and normalisation.
-* `sbom_tool/__init__.py` — marks `sbom_tool` as a Python package (enables `python -m sbom_tool...` reliably).
-* `sbom_tool/sbom_extract.py` — CLI script: image ref → SBOM outputs + metadata + digest registry update.
-* `sbom_tool/normalize_sbom.py` — CLI script: SBOM → normalised `packages.json`.
+- `README.md` — main project documentation (will be finalised at the end).
+- `DEV_DIARY.md` — day-wise implementation log + run instructions + decisions + TODOs.
+- `artifacts/` — generated outputs for each scanned image (cached by artifact key).
+- `artifacts/sha256_<...>/` — one scan “bundle” (SBOMs + metadata + normalised package list) for a specific image digest.
+- `artifacts/.../sbom.cdx.json` — CycloneDX SBOM JSON generated from the image.
+- `artifacts/.../sbom.spdx.json` — SPDX SBOM JSON generated from the image.
+- `artifacts/.../sbom.meta.json` — provenance (input ref, resolved digest, platform, tool versions, artifact key, timestamps).
+- `artifacts/.../packages.json` — internal normalised package list used by later stages (CVE scan join, scoring, dashboard).
+- `digests/` — digest registry to map shortened artifact keys back to full digests.
+- `digests/index.json` — global mapping of all known `artifact_key → full_digest` records.
+- `digests/sha256_<short>.json` — per-scan digest record (same mapping as index entry, but isolated per key).
+- `sbom_tool/` — Python tooling/scripts for SBOM extraction and normalisation.
+- `sbom_tool/__init__.py` — marks `sbom_tool` as a Python package (enables `python -m sbom_tool...` reliably).
+- `sbom_tool/sbom_extract.py` — CLI script: image ref → SBOM outputs + metadata + digest registry update.
+- `sbom_tool/normalize_sbom.py` — CLI script: SBOM → normalised `packages.json`.
 
 ---
 
@@ -92,9 +95,9 @@ riskybisky/riskybisky
 
 ### Prerequisites
 
-* Docker installed and running
-* `skopeo` installed (for tag → digest resolution)
-* Python venv created with `typer` + `rich`
+- Docker installed and running
+- `skopeo` installed (for tag → digest resolution)
+- Python venv created with `typer` + `rich`
 
 ### 0) Activate environment
 
@@ -113,9 +116,9 @@ python -m sbom_tool.sbom_extract -i nginx:1.27-alpine --platform linux/amd64
 
 After this, a folder will exist inside `artifacts/` containing:
 
-* `sbom.cdx.json`
-* `sbom.spdx.json`
-* `sbom.meta.json`
+- `sbom.cdx.json`
+- `sbom.spdx.json`
+- `sbom.meta.json`
 
 ### 2) Normalise SBOM → internal package list (`packages.json`)
 
@@ -152,29 +155,30 @@ skopeo inspect docker://nginx:1.27-alpine
 
 ## Design decisions
 
-* **Digest-based reproducibility**: resolve tags to `sha256:...` so scans are repeatable and cacheable.
-* **Artifact bundling**: store SBOMs + metadata + packages list together per scan in `artifacts/<artifact_key>/`.
-* **CycloneDX-first normalisation**: CycloneDX’s dependency representation is straightforward for depth estimation.
-* **Digest registry (`digests/`)**:
+- **Digest-based reproducibility**: resolve tags to `sha256:...` so scans are repeatable and cacheable.
+- **Artifact bundling**: store SBOMs + metadata + packages list together per scan in `artifacts/<artifact_key>/`.
+- **CycloneDX-first normalisation**: CycloneDX’s dependency representation is straightforward for depth estimation.
+- **Digest registry (`digests/`)**:
+    - `index.json` makes it easy to list/search all scans.
+    - per-key JSON files make it easy to load one mapping without parsing a large index.
 
-  * `index.json` makes it easy to list/search all scans.
-  * per-key JSON files make it easy to load one mapping without parsing a large index.
-* **Single-command CLIs**: avoids the “unexpected extra argument” error caused by Typer subcommand vs single-command mode mismatch.
+- **Single-command CLIs**: avoids the “unexpected extra argument” error caused by Typer subcommand vs single-command mode mismatch.
 
 ---
 
 ## Known issues / TODO
 
-* [ ] **Local-only images (not pushed to a registry)**: if `skopeo inspect` fails, extractor should fall back to `docker image inspect` to derive a stable local image ID.
-* [ ] **Richer file locations**: CycloneDX/SPDX may not include reliable file paths; optionally add Syft native JSON output later and merge locations into `packages.json`.
-* [ ] **Improve ecosystem/type mapping**: CycloneDX component `type` can be generic; better derive ecosystem from `purl` when available.
-* [ ] **Standardise ignoring generated files**: add `.gitignore` entries for `artifacts/`, `__pycache__/`, `.venv/` (when repo is ready for git hygiene).
+- [ ] **Local-only images (not pushed to a registry)**: if `skopeo inspect` fails, extractor should fall back to `docker image inspect` to derive a stable local image ID.
+- [ ] **Richer file locations**: CycloneDX/SPDX may not include reliable file paths; optionally add Syft native JSON output later and merge locations into `packages.json`.
+- [ ] **Improve ecosystem/type mapping**: CycloneDX component `type` can be generic; better derive ecosystem from `purl` when available.
+- [ ] **Standardise ignoring generated files**: add `.gitignore` entries for `artifacts/`, `__pycache__/`, `.venv/` (when repo is ready for git hygiene).
 
 ---
 
 ## Day 2 — Vulnerability Scanning + Normalised CVE Dataset (Grype)
 
 ### Goal (Checklist)
+
 - [x] Select a vulnerability scanner compatible with Syft/SBOM pipeline (Grype)
 - [x] Implement vulnerability scanning stage as a CLI tool
 - [x] Store raw scanner output for reproducibility (`vulns.grype.json`)
@@ -185,23 +189,25 @@ skopeo inspect docker://nginx:1.27-alpine
 ---
 
 ### What was implemented
+
 - **Vulnerability Scanner CLI** (`sbom_tool/vuln_scan.py`)
-  - Input: `--scan-dir artifacts/<artifact_key>`
-  - Uses **Grype (Docker image)** to scan vulnerabilities
-  - Default approach: scan the **SBOM** (consistent with SBOM-based pipeline)
-  - Produces two outputs:
-    - `vulns.grype.json` → raw Grype JSON output (for audit/re-runs without rescanning)
-    - `vulns.json` → internal normalised vulnerability list (for enrichment + scoring later)
-  - Joins vulnerability findings to our internal packages using:
-    - `purl` when present (preferred)
-    - fallback key: `<type>:<name>@<version>` when `purl` is missing
-  - Captures fix-related info where available:
-    - `fix_versions[]` and `fix_state` (best-effort extraction)
-  - Stores match detail hints (eg. match type/confidence) for later filtering of noisy matches
+    - Input: `--scan-dir artifacts/<artifact_key>`
+    - Uses **Grype (Docker image)** to scan vulnerabilities
+    - Default approach: scan the **SBOM** (consistent with SBOM-based pipeline)
+    - Produces two outputs:
+        - `vulns.grype.json` → raw Grype JSON output (for audit/re-runs without rescanning)
+        - `vulns.json` → internal normalised vulnerability list (for enrichment + scoring later)
+    - Joins vulnerability findings to our internal packages using:
+        - `purl` when present (preferred)
+        - fallback key: `<type>:<name>@<version>` when `purl` is missing
+    - Captures fix-related info where available:
+        - `fix_versions[]` and `fix_state` (best-effort extraction)
+    - Stores match detail hints (eg. match type/confidence) for later filtering of noisy matches
 
 ---
 
 ## Folder structure (current)
+
 ```text
 riskybisky/riskybisky
 ├── DEVDIARY.md
@@ -222,23 +228,23 @@ riskybisky/riskybisky
     ├── normalize_sbom.py
     ├── sbom_extract.py
     └── vuln_scan.py
-````
+```
 
 ### Notes (repo hygiene + behaviour)
 
-* `vulns.grype.json` is intentionally kept even though it’s “redundant” with `vulns.json`:
+- `vulns.grype.json` is intentionally kept even though it’s “redundant” with `vulns.json`:
+    - raw output is useful for debugging, auditing, and re-normalising later without rescanning.
 
-  * raw output is useful for debugging, auditing, and re-normalising later without rescanning.
-* SBOM-scanning is preferred over image-scanning because it keeps the vulnerability stage aligned with the exact SBOM we generated.
-* `__pycache__/` remains normal Python noise (safe to ignore/delete; don’t commit).
+- SBOM-scanning is preferred over image-scanning because it keeps the vulnerability stage aligned with the exact SBOM we generated.
+- `__pycache__/` remains normal Python noise (safe to ignore/delete; don’t commit).
 
 ---
 
 ## One-line explanation for every file/folder (new additions for Day 2)
 
-* `sbom_tool/vuln_scan.py` — runs Grype on the SBOM (or image) and generates `vulns.grype.json` + `vulns.json`.
-* `artifacts/.../vulns.grype.json` — raw vulnerability scan output from Grype (matches, artifacts, vulnerabilities, fix info).
-* `artifacts/.../vulns.json` — internal normalised vulnerabilities list (CVE + severity + package mapping + fix versions + match hints).
+- `sbom_tool/vuln_scan.py` — runs Grype on the SBOM (or image) and generates `vulns.grype.json` + `vulns.json`.
+- `artifacts/.../vulns.grype.json` — raw vulnerability scan output from Grype (matches, artifacts, vulnerabilities, fix info).
+- `artifacts/.../vulns.json` — internal normalised vulnerabilities list (CVE + severity + package mapping + fix versions + match hints).
 
 ---
 
@@ -268,8 +274,8 @@ python -m sbom_tool.vuln_scan --scan-dir artifacts/sha256_65645c7bb6a06618
 
 After this, the scan folder will contain:
 
-* `vulns.grype.json`
-* `vulns.json`
+- `vulns.grype.json`
+- `vulns.json`
 
 ### 3) Quick sanity checks (optional)
 
@@ -285,26 +291,104 @@ jq '.counts' artifacts/sha256_65645c7bb6a06618/vulns.json 2>/dev/null || true
 
 ## Design decisions
 
-* **Scanner choice: Grype** because it complements Syft and supports scanning SBOM inputs cleanly.
-* **Two-layer output**:
+- **Scanner choice: Grype** because it complements Syft and supports scanning SBOM inputs cleanly.
+- **Two-layer output**:
+    - raw (`vulns.grype.json`) for traceability
+    - normalised (`vulns.json`) for downstream enrichment/scoring/dashboard
 
-  * raw (`vulns.grype.json`) for traceability
-  * normalised (`vulns.json`) for downstream enrichment/scoring/dashboard
-* **Join strategy**:
+- **Join strategy**:
+    - prefer `purl` (stable cross-tool identifier)
+    - fallback to `<type>:<name>@<version>` when needed
 
-  * prefer `purl` (stable cross-tool identifier)
-  * fallback to `<type>:<name>@<version>` when needed
-* **Keep match hints** so we can later implement confidence-based filtering (reduce false positives).
+- **Keep match hints** so we can later implement confidence-based filtering (reduce false positives).
 
 ---
 
 ## Known issues / TODO (updated)
 
-* [ ] Add “local-only image” support robustly (if registry digest resolution fails, fall back to Docker inspect).
-* [ ] Add caching strategy for Grype DB updates (speed + offline resilience).
-* [ ] Add enrichment stage next: CVSS + EPSS + KEV with caching + graceful fallback.
-* [ ] Add simple summary export (counts by severity, top packages, top CVEs) for quick reporting.
-* [ ] Add confidence filtering rules using match detail hints (reduce noise before dashboard stage).
+- [ ] Add “local-only image” support robustly (if registry digest resolution fails, fall back to Docker inspect).
+- [ ] Add caching strategy for Grype DB updates (speed + offline resilience).
+- [ ] Add enrichment stage next: CVSS + EPSS + KEV with caching + graceful fallback.
+- [ ] Add simple summary export (counts by severity, top packages, top CVEs) for quick reporting.
+- [ ] Add confidence filtering rules using match detail hints (reduce noise before dashboard stage).
+
+---
+
+## Day 3 — API + Portal Scaffold (Initial Vertical Slice)
+
+### Goal (Checklist)
+
+- [x] Decide the first product shape for the portal and backend
+- [x] Add a Python API layer that reads the existing file-based artifact store
+- [x] Add a file-backed job model for scan submission
+- [x] Expose artifact listing, artifact detail, and raw file download endpoints
+- [x] Create a Next.js portal scaffold that can submit scans and browse artifacts
+- [x] Update repo hygiene for the new generated directories
+
+### What was implemented
+
+- **Python API** (`api/`)
+    - `api.main` exposes `/health`, `/api/artifacts`, `/api/artifacts/{artifact_key}`, `/api/jobs`, `/api/jobs/{job_id}`, and `POST /api/scans`
+    - `api.jobs` stores scan jobs as JSON files under `jobs/` and runs the existing pipeline in a background thread
+    - `api.storage` reads artifact bundles and serves raw artifact files from `artifacts/<artifact_key>/`
+    - The scan worker chains the current SBOM, normalisation, vulnerability, enrichment, ATT&CK mapping, and Navigator export stages
+
+- **Next.js Portal Scaffold** (`web/`)
+    - Adds a minimal App Router app with a scan form, artifact list, artifact detail view, package inventory preview, vulnerability preview, and ATT&CK summary preview
+    - Talks to the Python API through `NEXT_PUBLIC_API_BASE_URL`
+    - Uses a dark, high-contrast UI so the portal is usable immediately without waiting for a full design system pass
+
+### Notes
+
+- The first implementation keeps the current file-based artifact layout as the source of truth.
+- `risk_scores.json` is generated in the API pipeline by copying the enriched vulnerability output so the ATT&CK mapper can continue using its current input contract.
+- The UI currently previews the first slice of each dataset; the next pass should add detail pages and richer filtering.
+
+### Folder structure (new additions)
+
+```text
+riskybisky/riskybisky
+├── api
+│   ├── __init__.py
+│   ├── jobs.py
+│   ├── main.py
+│   ├── schemas.py
+│   ├── settings.py
+│   └── storage.py
+└── web
+    ├── app
+    │   ├── globals.css
+    │   ├── layout.js
+    │   └── page.js
+    ├── next.config.js
+    ├── next-env.d.ts
+    ├── package.json
+    ├── postcss.config.js
+    └── tsconfig.json
+```
+
+### How to run (new surface)
+
+#### 1) Start the Python API
+
+```bash
+uvicorn api.main:app --reload --port 8000
+```
+
+#### 2) Start the Next.js portal
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+### TODO
+
+- [ ] Add richer artifact detail pages for packages, vulnerabilities, and ATT&CK outputs.
+- [ ] Replace the current background thread with a more durable queue/worker if scan volume grows.
+- [ ] Add validation and better error messaging for scan submission.
+- [ ] Decide whether to support scan history persistence beyond file-backed jobs.
 
 ```
 ::contentReference[oaicite:1]{index=1}

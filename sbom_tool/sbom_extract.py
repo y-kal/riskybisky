@@ -159,7 +159,7 @@ def main(
             "created_at": datetime.now(IST).isoformat(),
         }
         write_digest_registry(project_root, artifact_key, record)
-        return
+        return record
 
     print("[cyan]Ensuring Syft image...[/cyan]")
     ensure_syft_image()
@@ -202,6 +202,7 @@ def main(
 
     print(f"[bold green]Done[/bold green] → {out_dir}")
     print(f"[bold green]Digest registry updated[/bold green] → {project_root / 'digests'}")
+    return record
 
 if __name__ == "__main__":
     typer.run(main)
