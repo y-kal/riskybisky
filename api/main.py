@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .jobs import list_jobs, load_job, start_scan_job
 from .schemas import ArtifactDetailResponse, ArtifactListResponse, ArtifactSummary, JobResponse, ScanRequest
+from .settings import UPLOADS_DIR
 from .storage import artifact_files, artifact_summary, ensure_data_dirs, list_artifact_keys, load_artifact_bundle, resolve_artifact_file
 
 
@@ -80,6 +82,38 @@ def get_job(job_id: str) -> JobResponse:
 @app.post("/api/scans", response_model=JobResponse)
 def create_scan(request: ScanRequest) -> JobResponse:
     return JobResponse(**start_scan_job(request.model_dump()))
+
+
+@app.post("/api/scans/upload", response_model=JobResponse)
+async def create_scan_from_tar(
+    file: UploadFile = File(...),
+    platform: str = Form("linux/amd64"),
+    short_len: int = Form(16),
+    skip_pull: bool = Form(False),
+    image_name: str = Form(""),
+) -> JobResponse:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Missing uploaded file name")
+
+    suffix = Path(file.filename).suffix or ".tar"
+    upload_name = f"{uuid4()}{suffix}"
+    upload_path = UPLOADS_DIR / upload_name
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty")
+    upload_path.write_bytes(content)
+
+    request_payload = {
+        "image": "",
+        "platform": platform,
+        "short_len": short_len,
+        "skip_pull": skip_pull,
+        "image_tar_path": str(upload_path),
+        "image_tar_name": file.filename,
+        "tar_image_name": image_name.strip(),
+    }
+    return JobResponse(**start_scan_job(request_payload))
 
 
 @app.get("/api/artifacts/{artifact_key}/package-count")

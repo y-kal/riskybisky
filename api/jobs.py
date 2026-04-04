@@ -84,13 +84,26 @@ def _copy_json(src: Path, dst: Path) -> None:
 def run_scan_job(job_id: str) -> None:
     request = load_job(job_id).get("request", {})
     image = str(request.get("image") or "").strip()
+    image_tar_path = str(request.get("image_tar_path") or "").strip()
+    tar_image_name = str(request.get("tar_image_name") or "").strip()
     platform = str(request.get("platform") or "linux/amd64").strip()
     short_len = int(request.get("short_len") or 16)
     skip_pull = bool(request.get("skip_pull") or False)
 
     try:
+        if image_tar_path:
+            update_job(job_id, status="running", stage="load_tar", message="Loading image tar")
+            skip_pull = True
+
         update_job(job_id, status="running", stage="sbom_extract", message="Generating SBOMs")
-        extract_result = sbom_extract.main(image=image, platform=platform, short_len=short_len, skip_pull=skip_pull) or {}
+        extract_result = sbom_extract.main(
+            image=image,
+            tar_path=image_tar_path or None,
+            tar_image=tar_image_name or None,
+            platform=platform,
+            short_len=short_len,
+            skip_pull=skip_pull,
+        ) or {}
 
         artifact_key = str(extract_result.get("artifact_key") or "").strip()
         if not artifact_key:
@@ -136,6 +149,14 @@ def run_scan_job(job_id: str) -> None:
         update_job(job_id, status="completed", stage="done", message="Scan completed", outputs=outputs)
     except Exception as exc:
         update_job(job_id, status="failed", stage="error", message=str(exc), error=str(exc))
+    finally:
+        if image_tar_path:
+            tar_file = Path(image_tar_path)
+            try:
+                if tar_file.exists():
+                    tar_file.unlink()
+            except Exception:
+                pass
 
 
 def start_scan_job(request: Dict[str, Any]) -> Dict[str, Any]:

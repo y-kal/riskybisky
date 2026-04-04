@@ -18,7 +18,10 @@ async function fetchJson(path, options) {
 }
 
 export default function HomePage() {
+    const [scanMode, setScanMode] = useState("image");
     const [image, setImage] = useState("nginx:1.27-alpine");
+    const [tarFile, setTarFile] = useState(null);
+    const [tarImageName, setTarImageName] = useState("");
     const [platform, setPlatform] = useState("linux/amd64");
     const [artifacts, setArtifacts] = useState([]);
     const [selectedKey, setSelectedKey] = useState("");
@@ -82,15 +85,42 @@ export default function HomePage() {
         setError("");
         setLoading(true);
         try {
-            const data = await fetchJson("/api/scans", {
-                method: "POST",
-                body: JSON.stringify({
-                    image,
-                    platform,
-                    short_len: 16,
-                    skip_pull: false,
-                }),
-            });
+            let data;
+            if (scanMode === "tar") {
+                if (!tarFile) {
+                    throw new Error("Choose a tar file before running scan");
+                }
+                const formData = new FormData();
+                formData.append("file", tarFile);
+                formData.append("platform", platform);
+                formData.append("short_len", "16");
+                formData.append("skip_pull", "false");
+                if (tarImageName.trim()) {
+                    formData.append("image_name", tarImageName.trim());
+                }
+
+                const response = await fetch(`${API_BASE}/api/scans/upload`, {
+                    method: "POST",
+                    body: formData,
+                });
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(
+                        text || `Request failed: ${response.status}`,
+                    );
+                }
+                data = await response.json();
+            } else {
+                data = await fetchJson("/api/scans", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        image,
+                        platform,
+                        short_len: 16,
+                        skip_pull: false,
+                    }),
+                });
+            }
             setJob(data);
         } catch (err) {
             setError(err.message);
@@ -116,13 +146,54 @@ export default function HomePage() {
                 </div>
                 <form className="scan-card" onSubmit={submitScan}>
                     <label>
-                        Image reference
-                        <input
-                            value={image}
-                            onChange={(event) => setImage(event.target.value)}
-                            placeholder="nginx:1.27-alpine"
-                        />
+                        Input type
+                        <select
+                            value={scanMode}
+                            onChange={(event) =>
+                                setScanMode(event.target.value)
+                            }
+                        >
+                            <option value="image">Image reference</option>
+                            <option value="tar">Local image tar</option>
+                        </select>
                     </label>
+                    {scanMode === "image" ? (
+                        <label>
+                            Image reference
+                            <input
+                                value={image}
+                                onChange={(event) =>
+                                    setImage(event.target.value)
+                                }
+                                placeholder="nginx:1.27-alpine"
+                            />
+                        </label>
+                    ) : (
+                        <>
+                            <label>
+                                Image tar file
+                                <input
+                                    type="file"
+                                    accept=".tar,.tgz,.tar.gz"
+                                    onChange={(event) =>
+                                        setTarFile(
+                                            event.target.files?.[0] || null,
+                                        )
+                                    }
+                                />
+                            </label>
+                            <label>
+                                Image name in tar (optional)
+                                <input
+                                    value={tarImageName}
+                                    onChange={(event) =>
+                                        setTarImageName(event.target.value)
+                                    }
+                                    placeholder="repo/name:tag"
+                                />
+                            </label>
+                        </>
+                    )}
                     <label>
                         Platform
                         <input

@@ -37,12 +37,31 @@ def resolve_digest(image_ref: str) -> str:
     if "@sha256:" in image_ref:
         return image_ref.split("@", 1)[1]
 
-    out = run(["skopeo", "inspect", f"docker://{image_ref}"])
-    data = json.loads(out)
-    digest = data.get("Digest")
-    if not digest:
-        raise RuntimeError("Could not resolve digest from skopeo inspect output.")
+    try:
+        out = run(["skopeo", "inspect", f"docker://{image_ref}"])
+        data = json.loads(out)
+        digest = data.get("Digest")
+        if digest:
+            return digest
+    except Exception:
+        pass
+
+    out = run(["docker", "image", "inspect", image_ref, "--format", "{{.Id}}"])
+    digest = out.strip()
+    if not digest or not digest.startswith("sha256:"):
+        raise RuntimeError("Could not resolve digest from skopeo or docker inspect output.")
     return digest
+
+def load_images_from_tar(tar_path: Path) -> list[str]:
+    out = run(["docker", "load", "-i", str(tar_path)])
+    images: list[str] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Loaded image:"):
+            images.append(line.split("Loaded image:", 1)[1].strip())
+        elif line.startswith("Loaded image ID:"):
+            images.append(line.split("Loaded image ID:", 1)[1].strip())
+    return [name for name in images if name]
 
 def digest_hex(full_digest: str) -> str:
     return full_digest.split(":", 1)[1]
@@ -116,7 +135,9 @@ def write_digest_registry(project_root: Path, artifact_key: str, record: dict) -
     index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
 
 def main(
-    image: str = typer.Option(..., "--image", "-i", help="Image ref (tag or digest), e.g. nginx:1.27-alpine"),
+    image: str = typer.Option("", "--image", "-i", help="Image ref (tag or digest), e.g. nginx:1.27-alpine"),
+    tar_path: Optional[str] = typer.Option(None, "--tar-path", help="Path to local docker image tar archive"),
+    tar_image: Optional[str] = typer.Option(None, "--tar-image", help="Image name from tar when archive has multiple images"),
     platform: str = typer.Option("linux/amd64", "--platform", help="Platform for reproducibility (default linux/amd64)"),
     short_len: int = typer.Option(16, "--short-len", help="Digest hex chars used in artifact folder name"),
     skip_pull: bool = typer.Option(False, "--skip-pull", help="Skip docker pull if image already available"),
@@ -133,11 +154,29 @@ def main(
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     digests_dir.mkdir(parents=True, exist_ok=True)
 
+    if tar_path:
+        loaded_images = load_images_from_tar(Path(tar_path))
+        if tar_image:
+            image = tar_image.strip()
+        elif len(loaded_images) == 1:
+            image = loaded_images[0]
+        elif len(loaded_images) > 1:
+            available = ", ".join(loaded_images)
+            raise RuntimeError(f"Tar contains multiple images. Provide tar_image. Available: {available}")
+        else:
+            raise RuntimeError("Could not detect any image names while loading tar archive")
+
+    image = image.strip()
+    if not image:
+        raise RuntimeError("Image reference is required (image or tar_path must be provided)")
+
     full_digest = resolve_digest(image)  # sha256:...
     artifact_key = choose_artifact_key(full_digest, digests_dir, initial_len=short_len)
 
     repo = strip_tag(image)
-    image_with_digest = image if "@sha256:" in image else f"{repo}@{full_digest}"
+    image_with_digest = image
+    if "@sha256:" not in image and not image.startswith("sha256:"):
+        image_with_digest = f"{repo}@{full_digest}"
 
     out_dir = artifacts_dir / artifact_key
     out_dir.mkdir(parents=True, exist_ok=True)

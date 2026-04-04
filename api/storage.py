@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .settings import ARTIFACTS_DIR, DIGESTS_DIR, JOBS_DIR
+from .settings import ARTIFACTS_DIR, DIGESTS_DIR, JOBS_DIR, UPLOADS_DIR
 
 
 EXPECTED_ARTIFACT_FILES = [
@@ -26,6 +26,7 @@ def ensure_data_dirs() -> None:
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     DIGESTS_DIR.mkdir(parents=True, exist_ok=True)
     JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def read_json(path: Path) -> Any:
