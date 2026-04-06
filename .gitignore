@@ -12,6 +12,11 @@ env/
 artifacts/
 digests/
 cache/
+jobs/
+
+# Web app build artifacts
+web/node_modules/
+web/.next/
 
 # Local secrets
 .env

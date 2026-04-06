@@ -1,3 +1,7 @@
 python-dotenv
 typer
 rich
+fastapi
+uvicorn
+pydantic
+python-multipart
