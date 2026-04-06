@@ -140,8 +140,6 @@ riskybisky/
     └── ...
 ```
 
-> The exact folder/file set may vary slightly across commits, but the pipeline is organised around artifact bundles per scanned image.
-
 ---
 
 ## How it works
