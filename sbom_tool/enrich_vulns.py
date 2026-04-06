@@ -16,8 +16,6 @@ from rich import print
 
 load_dotenv()
 
-app = typer.Typer(add_completion=False, no_args_is_help=True)
-
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 EPSS_URL = "https://api.first.org/data/v1/epss"
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -472,24 +470,15 @@ def enrich_record(
     return out
 
 
-@app.command()
 def main(
-    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
-    out_name: str = typer.Option("vulns.enriched.json", "--out-name", help="Output file name"),
-    cache_dir: Path = typer.Option(Path("cache"), "--cache-dir", help="Cache directory"),
-    refresh_nvd: bool = typer.Option(False, "--refresh-nvd", help="Re-fetch NVD even if cached"),
-    refresh_epss: bool = typer.Option(False, "--refresh-epss", help="Re-fetch EPSS even if cached"),
-    refresh_kev: bool = typer.Option(False, "--refresh-kev", help="Re-fetch KEV even if cached"),
-    nvd_api_key: Optional[str] = typer.Option(
-        None,
-        "--nvd-api-key",
-        help="Optional NVD API key (or set NVD_API_KEY env var)",
-    ),
-    nvd_sleep_seconds: float = typer.Option(
-        0.6,
-        "--nvd-sleep-seconds",
-        help="Delay between NVD calls to reduce rate-limit problems",
-    ),
+    scan_dir: Path,
+    out_name: str = "vulns.enriched.json",
+    cache_dir: Path = Path("cache"),
+    refresh_nvd: bool = False,
+    refresh_epss: bool = False,
+    refresh_kev: bool = False,
+    nvd_api_key: Optional[str] = None,
+    nvd_sleep_seconds: float = 0.6,
 ) -> None:
     project_root = Path(__file__).resolve().parent.parent
     cache_dir = (project_root / cache_dir).resolve() if not cache_dir.is_absolute() else cache_dir
@@ -596,5 +585,35 @@ def main(
     print(f"[bold green]Wrote[/bold green]: {out_path}")
 
 
+def cli(
+    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
+    out_name: str = typer.Option("vulns.enriched.json", "--out-name", help="Output file name"),
+    cache_dir: Path = typer.Option(Path("cache"), "--cache-dir", help="Cache directory"),
+    refresh_nvd: bool = typer.Option(False, "--refresh-nvd", help="Re-fetch NVD even if cached"),
+    refresh_epss: bool = typer.Option(False, "--refresh-epss", help="Re-fetch EPSS even if cached"),
+    refresh_kev: bool = typer.Option(False, "--refresh-kev", help="Re-fetch KEV even if cached"),
+    nvd_api_key: Optional[str] = typer.Option(
+        None,
+        "--nvd-api-key",
+        help="Optional NVD API key (or set NVD_API_KEY env var)",
+    ),
+    nvd_sleep_seconds: float = typer.Option(
+        0.6,
+        "--nvd-sleep-seconds",
+        help="Delay between NVD calls to reduce rate-limit problems",
+    ),
+) -> None:
+    return main(
+        scan_dir=scan_dir,
+        out_name=out_name,
+        cache_dir=cache_dir,
+        refresh_nvd=refresh_nvd,
+        refresh_epss=refresh_epss,
+        refresh_kev=refresh_kev,
+        nvd_api_key=nvd_api_key,
+        nvd_sleep_seconds=nvd_sleep_seconds,
+    )
+
+
 if __name__ == "__main__":
-    app()
+    typer.run(cli)

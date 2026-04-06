@@ -23,8 +23,6 @@ from sbom_tool.attack_common import (
     write_json,
 )
 
-app = typer.Typer(add_completion=False, no_args_is_help=True)
-
 CWE_RULES: List[Dict[str, Any]] = [
     {
         "cwes": {"CWE-77", "CWE-78", "CWE-88", "CWE-89", "CWE-90", "CWE-94", "CWE-917"},
@@ -431,16 +429,15 @@ def build_attack_summary(mapped_vulns: List[Dict[str, Any]]) -> List[Dict[str, A
     return techniques
 
 
-@app.command()
 def main(
-    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
-    scores_name: str = typer.Option("risk_scores.json", "--scores-name", help="Scored vulnerability input"),
-    mapping_name: str = typer.Option("attack_mapping.json", "--mapping-name", help="Mapping output file"),
-    summary_name: str = typer.Option("attack_summary.json", "--summary-name", help="Technique summary output file"),
-    cache_dir: Path = typer.Option(Path("cache"), "--cache-dir", help="Cache directory"),
-    refresh_attack: bool = typer.Option(False, "--refresh-attack", help="Re-fetch ATT&CK STIX data"),
-    min_confidence: float = typer.Option(0.2, "--min-confidence", min=0.0, max=1.0, help="Minimum mapping confidence"),
-    attack_url: str = typer.Option(ATTACK_STIX_URL, "--attack-url", help="ATT&CK STIX bundle URL"),
+    scan_dir: Path,
+    scores_name: str = "risk_scores.json",
+    mapping_name: str = "attack_mapping.json",
+    summary_name: str = "attack_summary.json",
+    cache_dir: Path = Path("cache"),
+    refresh_attack: bool = False,
+    min_confidence: float = 0.2,
+    attack_url: str = ATTACK_STIX_URL,
 ) -> None:
     scores_path = scan_dir / scores_name
     mapping_path = scan_dir / mapping_name
@@ -527,5 +524,27 @@ def main(
     print(f"[bold green]Wrote[/bold green]: {summary_path}")
 
 
+def cli(
+    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
+    scores_name: str = typer.Option("risk_scores.json", "--scores-name", help="Scored vulnerability input"),
+    mapping_name: str = typer.Option("attack_mapping.json", "--mapping-name", help="Mapping output file"),
+    summary_name: str = typer.Option("attack_summary.json", "--summary-name", help="Technique summary output file"),
+    cache_dir: Path = typer.Option(Path("cache"), "--cache-dir", help="Cache directory"),
+    refresh_attack: bool = typer.Option(False, "--refresh-attack", help="Re-fetch ATT&CK STIX data"),
+    min_confidence: float = typer.Option(0.2, "--min-confidence", min=0.0, max=1.0, help="Minimum mapping confidence"),
+    attack_url: str = typer.Option(ATTACK_STIX_URL, "--attack-url", help="ATT&CK STIX bundle URL"),
+) -> None:
+    return main(
+        scan_dir=scan_dir,
+        scores_name=scores_name,
+        mapping_name=mapping_name,
+        summary_name=summary_name,
+        cache_dir=cache_dir,
+        refresh_attack=refresh_attack,
+        min_confidence=min_confidence,
+        attack_url=attack_url,
+    )
+
+
 if __name__ == "__main__":
-    app()
+    typer.run(cli)

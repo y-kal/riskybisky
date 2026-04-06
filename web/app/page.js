@@ -5,6 +5,18 @@ import { useEffect, useMemo, useState } from "react";
 const API_BASE =
     process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
+const VULNERABILITY_SEVERITY_ORDER = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+};
+
+function getSeverityRank(severity) {
+    const normalized = String(severity || "").trim().toLowerCase();
+    return VULNERABILITY_SEVERITY_ORDER[normalized] ?? 4;
+}
+
 async function fetchJson(path, options) {
     const response = await fetch(`${API_BASE}${path}`, {
         headers: { "Content-Type": "application/json" },
@@ -80,6 +92,38 @@ export default function HomePage() {
         ];
     }, [selectedArtifact]);
 
+    const sortedVulnerabilities = useMemo(() => {
+        const vulnerabilities =
+            selectedArtifact?.vulns?.vulnerabilities?.map((item, index) => ({
+                ...item,
+                originalIndex: index,
+            })) || [];
+
+        return [...vulnerabilities].sort((left, right) => {
+            const severityDifference =
+                getSeverityRank(left.severity) - getSeverityRank(right.severity);
+            if (severityDifference !== 0) {
+                return severityDifference;
+            }
+
+            const vulnIdComparison = String(left.vuln_id || "").localeCompare(
+                String(right.vuln_id || ""),
+            );
+            if (vulnIdComparison !== 0) {
+                return vulnIdComparison;
+            }
+
+            const packageComparison = String(
+                left.package_name || "",
+            ).localeCompare(String(right.package_name || ""));
+            if (packageComparison !== 0) {
+                return packageComparison;
+            }
+
+            return left.originalIndex - right.originalIndex;
+        });
+    }, [selectedArtifact]);
+
     async function submitScan(event) {
         event.preventDefault();
         setError("");
@@ -138,24 +182,24 @@ export default function HomePage() {
                         Scan containers, inspect risk, and browse ATT&CK output
                         in one portal.
                     </h1>
-                    <p className="lede">
-                        The portal talks to a Python API that reuses the
-                        existing SBOM, vulnerability, enrichment, and ATT&CK
-                        pipeline.
-                    </p>
                 </div>
                 <form className="scan-card" onSubmit={submitScan}>
                     <label>
                         Input type
-                        <select
-                            value={scanMode}
-                            onChange={(event) =>
-                                setScanMode(event.target.value)
-                            }
-                        >
-                            <option value="image">Image reference</option>
-                            <option value="tar">Local image tar</option>
-                        </select>
+                        <div className="select-shell">
+                            <select
+                                value={scanMode}
+                                onChange={(event) =>
+                                    setScanMode(event.target.value)
+                                }
+                            >
+                                <option value="image">Image reference</option>
+                                <option value="tar">Local image tar</option>
+                            </select>
+                            <span className="select-arrow" aria-hidden="true">
+                                ▾
+                            </span>
+                        </div>
                     </label>
                     {scanMode === "image" ? (
                         <label>
@@ -170,18 +214,32 @@ export default function HomePage() {
                         </label>
                     ) : (
                         <>
-                            <label>
-                                Image tar file
-                                <input
-                                    type="file"
-                                    accept=".tar,.tgz,.tar.gz"
-                                    onChange={(event) =>
-                                        setTarFile(
-                                            event.target.files?.[0] || null,
-                                        )
-                                    }
-                                />
-                            </label>
+                            <div className="form-field">
+                                <span>Image tar file</span>
+                                <div>
+                                    <label className="file-picker">
+                                        <input
+                                            className="sr-only-file-input"
+                                            type="file"
+                                            accept=".tar,.tgz,.tar.gz"
+                                            onChange={(event) =>
+                                                setTarFile(
+                                                    event.target.files?.[0] ||
+                                                        null,
+                                                )
+                                            }
+                                        />
+                                        <span className="file-picker-button">
+                                            Browse files
+                                        </span>
+                                        <span className="file-picker-value">
+                                            {tarFile
+                                                ? tarFile.name
+                                                : "Select a local image tar"}
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
                             <label>
                                 Image name in tar (optional)
                                 <input
@@ -245,10 +303,10 @@ export default function HomePage() {
                                     setSelectedKey(artifact.artifact_key)
                                 }
                             >
-                                <strong>{artifact.artifact_key}</strong>
-                                <span>
+                                <strong>
                                     {artifact.image_input || "unknown image"}
-                                </span>
+                                </strong>
+                                <span>{artifact.artifact_key}</span>
                             </button>
                         ))}
                     </div>
@@ -289,7 +347,7 @@ export default function HomePage() {
 
                             <div className="table-block">
                                 <h3>Packages</h3>
-                                <div className="table-scroll">
+                                <div className="table-scroll packages-scroll">
                                     <table>
                                         <thead>
                                             <tr>
@@ -303,22 +361,18 @@ export default function HomePage() {
                                             {(
                                                 selectedArtifact.packages
                                                     .packages || []
-                                            )
-                                                .slice(0, 12)
-                                                .map((pkg) => (
-                                                    <tr key={pkg.id}>
-                                                        <td>{pkg.name}</td>
-                                                        <td>
-                                                            {pkg.version || "—"}
-                                                        </td>
-                                                        <td>{pkg.type}</td>
-                                                        <td>
-                                                            {
-                                                                pkg.dependency_depth
-                                                            }
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                            ).map((pkg) => (
+                                                <tr key={pkg.id}>
+                                                    <td>{pkg.name}</td>
+                                                    <td>
+                                                        {pkg.version || "—"}
+                                                    </td>
+                                                    <td>{pkg.type}</td>
+                                                    <td>
+                                                        {pkg.dependency_depth}
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
@@ -327,7 +381,7 @@ export default function HomePage() {
                             <div className="table-block two-col">
                                 <div>
                                     <h3>Vulnerabilities</h3>
-                                    <div className="table-scroll">
+                                    <div className="table-scroll summary-scroll">
                                         <table>
                                             <thead>
                                                 <tr>
@@ -337,12 +391,8 @@ export default function HomePage() {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {(
-                                                    selectedArtifact.vulns
-                                                        .vulnerabilities || []
-                                                )
-                                                    .slice(0, 10)
-                                                    .map((item, index) => (
+                                                {sortedVulnerabilities.map(
+                                                    (item, index) => (
                                                         <tr
                                                             key={`${item.vuln_id}-${index}`}
                                                         >
@@ -358,14 +408,15 @@ export default function HomePage() {
                                                                 }
                                                             </td>
                                                         </tr>
-                                                    ))}
+                                                    ),
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>
                                 </div>
                                 <div>
                                     <h3>ATT&CK Techniques</h3>
-                                    <div className="table-scroll">
+                                    <div className="table-scroll summary-scroll">
                                         <table>
                                             <thead>
                                                 <tr>
@@ -379,29 +430,25 @@ export default function HomePage() {
                                                     selectedArtifact
                                                         .attack_summary
                                                         .techniques || []
-                                                )
-                                                    .slice(0, 10)
-                                                    .map((item) => (
-                                                        <tr
-                                                            key={
+                                                ).map((item) => (
+                                                    <tr
+                                                        key={item.technique_id}
+                                                    >
+                                                        <td>
+                                                            {
                                                                 item.technique_id
                                                             }
-                                                        >
-                                                            <td>
-                                                                {
-                                                                    item.technique_id
-                                                                }
-                                                            </td>
-                                                            <td>
-                                                                {item.priority}
-                                                            </td>
-                                                            <td>
-                                                                {
-                                                                    item.aggregate_risk
-                                                                }
-                                                            </td>
-                                                        </tr>
-                                                    ))}
+                                                        </td>
+                                                        <td>
+                                                            {item.priority}
+                                                        </td>
+                                                        <td>
+                                                            {
+                                                                item.aggregate_risk
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                ))}
                                             </tbody>
                                         </table>
                                     </div>

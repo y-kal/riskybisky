@@ -117,7 +117,14 @@ def run_scan_job(job_id: str) -> None:
         normalize_sbom.main(scan_dir=artifact_dir)
 
         update_job(job_id, stage="scan_vulns", message="Scanning vulnerabilities")
-        vuln_scan.main(scan_dir=artifact_dir, mode="sbom", force=True)
+        vuln_scan.main(
+            scan_dir=artifact_dir,
+            mode="sbom",
+            grype_image="anchore/grype:latest",
+            by_cve=True,
+            use_cache=True,
+            force=True,
+        )
 
         update_job(job_id, stage="enrich_vulns", message="Enriching vulnerabilities")
         enrich_vulns.main(scan_dir=artifact_dir)

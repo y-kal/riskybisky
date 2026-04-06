@@ -8,8 +8,6 @@ from rich import print
 
 from sbom_tool.attack_common import iso_now, normalise_priority, read_json, safe_str, to_float, write_json
 
-app = typer.Typer(add_completion=False, no_args_is_help=True)
-
 
 def _priority_color(priority: str) -> str:
     mapping = {
@@ -102,12 +100,11 @@ def build_navigator_layer(summary: Dict[str, Any], layer_name: str) -> Dict[str,
     }
 
 
-@app.command()
 def main(
-    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
-    summary_name: str = typer.Option("attack_summary.json", "--summary-name", help="Technique summary input"),
-    out_name: str = typer.Option("attack_navigator_layer.json", "--out-name", help="Navigator layer output"),
-    layer_name: str = typer.Option("riskybisky ATT&CK Exposure", "--layer-name", help="Navigator layer name"),
+    scan_dir: Path,
+    summary_name: str = "attack_summary.json",
+    out_name: str = "attack_navigator_layer.json",
+    layer_name: str = "riskybisky ATT&CK Exposure",
 ) -> None:
     summary_path = scan_dir / summary_name
     out_path = scan_dir / out_name
@@ -122,5 +119,19 @@ def main(
     print(f"[bold green]Wrote[/bold green]: {out_path}")
 
 
+def cli(
+    scan_dir: Path = typer.Option(..., "--scan-dir", help="Path to artifacts/<artifact_key>"),
+    summary_name: str = typer.Option("attack_summary.json", "--summary-name", help="Technique summary input"),
+    out_name: str = typer.Option("attack_navigator_layer.json", "--out-name", help="Navigator layer output"),
+    layer_name: str = typer.Option("riskybisky ATT&CK Exposure", "--layer-name", help="Navigator layer name"),
+) -> None:
+    return main(
+        scan_dir=scan_dir,
+        summary_name=summary_name,
+        out_name=out_name,
+        layer_name=layer_name,
+    )
+
+
 if __name__ == "__main__":
-    app()
+    typer.run(cli)
